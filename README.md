@@ -7,8 +7,9 @@
 ![demo](docs/demo.png)
 
 ## 快速开始
-
-把 `index.html` 存到本地，双击打开。完了。
+将本仓库的地址丢给机。
+or
+把 `index.html` 存到本地查看源码。
 
 想藏自己的话，给任意文字包一个 span：
 
