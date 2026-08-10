@@ -50,6 +50,8 @@
 ## 许可
 
 MIT © 2026 [Rime](https://tutooth.com)（小雾）
+二改请随意
+使用本仓库代码二改再发布请标注 @ankoo3o
 
 ## 鸣谢
 
