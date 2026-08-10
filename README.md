@@ -42,6 +42,11 @@
 **③ 动画循环只能有一条。**
 如果 `requestAnimationFrame` 的调度散落在多处（帧回调结尾一处、某个兜底逻辑里又一处），循环会悄悄分裂成多条并行的，页面越跑越卡还查不出为什么。排新帧之前，先确认没有别人已经排过。
 
+## 免责声明
+
+本项目与 Meta Platforms, Inc. 及 Threads 无任何关联、赞助或授权关系，仅为对其交互设计的学习性复刻与致敬。代码为从零实现，不含任何 Meta 的代码或素材。
+*This project is not affiliated with, sponsored, or endorsed by Meta Platforms, Inc. or Threads. It is an independent, from-scratch educational homage to their interaction design and contains no Meta code or assets.*
+
 ## 许可
 
 MIT © 2026 [Rime](https://tutooth.com)（小雾）
