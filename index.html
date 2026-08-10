@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="zh">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>星尘 spoiler · 百行 demo</title>
+<style>
+  body{
+    margin:0; min-height:100vh; display:grid; place-items:center;
+    background:#fdf4f2; color:#5c3a44;
+    font:17px/2 "PingFang SC","Microsoft YaHei",sans-serif;
+  }
+  main{ max-width:32em; padding:2.5em 1.5em; }
+  h1{ font-size:1.15em; letter-spacing:.05em; }
+  .secret{
+    color:transparent;               /* 字还在原位占地方，只是看不见 */
+    cursor:pointer;
+    transition:color .22s ease;      /* 揭开时 transparent → 继承色，颜色是可以过渡的 */
+    user-select:none;                /* 藏着的时候别让人选中复制走 */
+    -webkit-tap-highlight-color:transparent;
+  }
+  .secret.open{ color:inherit; user-select:auto; }
+  canvas{
+    /* 重要：absolute 钉在页面上，不是 fixed 钉在屏幕上。
+       fixed + JS 每帧追文字位置的写法，在手机上滚动是合成器线程干的活，
+       JS 读到的位置慢半拍，尘会肉眼可见地掉队（实测踩过）。
+       钉在页面上，滚动时浏览器把画布和文字一起原生搬走，天生同步。 */
+    position:absolute; left:0; top:0;
+    pointer-events:none;             /* 画布只负责好看，点击穿过去落在文字上 */
+  }
+  footer{ margin-top:3em; font-size:.8em; opacity:.55; }
+</style>
+<main>
+  <h1>✦ 点一下雾，看看藏了什么</h1>
+  <p>今天路过面包店，<span class="secret">试吃的小姐姐多塞给我一块曲奇</span>，所以明天还要走这条路。</p>
+  <p>顺便说，<span class="secret">这条雾带会自动跟着文字折行，藏多长的话都可以，每一行都有自己的一条星尘</span>，不信把窗口拉窄再点开看。</p>
+  <footer>整个效果就在这一个文件里 · 右键「查看网页源代码」即是全部</footer>
+</main>
+<canvas id="dust"></canvas>
+<script>
+const canvas = document.getElementById("dust");
+const ctx = canvas.getContext("2d");
+
+/* ── 1. 画布铺满整个文档（不是整个屏幕），并做高分屏适配：
+   canvas 内部像素 = css 像素 × dpr，画出来才不糊 ── */
+let W = 0, H = 0;
+function fit(){
+  const dpr = Math.min(devicePixelRatio || 1, 3);
+  W = document.documentElement.scrollWidth;
+  H = document.documentElement.scrollHeight;
+  canvas.style.width = W + "px";
+  canvas.style.height = H + "px";
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);   // 设完之后，后面一律按 css 像素画
+}
+fit();
+
+/* ── 2. 播种：给每个 .secret 的每一行铺一条雾带 ──
+   getClientRects() 会把跨行的文字拆成一行一个矩形，天生适合当雾带。
+   矩形是「屏幕坐标」，加上当下的滚动量就换算成「页面坐标」——
+   粒子存页面坐标，之后每帧照着画就行，滚动的事浏览器管。
+   「没有边框感」的关键也在这一步：纵向钟形随机（中间厚、边上稀），
+   横向离两端越近越透明 —— 雾带是「化开」的，不存在一条硬边界。 */
+const bell = () => (Math.random() + Math.random() + Math.random()) / 3;   // 0~1 的钟形随机
+
+function seed(el){
+  const parts = [];
+  const rects = [...el.getClientRects()];
+  rects.forEach(r => {
+    const left = r.left + scrollX, top = r.top + scrollY;   // 屏幕坐标 → 页面坐标
+    const n = Math.round(r.width * r.height / 26);          // 面积越大，粒越多
+    for (let i = 0; i < n; i++){
+      const x = -6 + Math.random() * (r.width + 12);        // 允许出头一点点
+      const y = r.height * (0.5 + (bell() - 0.5) * 1.4);
+      let edge = Math.exp(-(((y / r.height - .5) * 2.2) ** 2));     // 离行中线越远越淡
+      edge *= Math.max(.12, Math.min(1, Math.min(x + 6, r.width + 6 - x) / 14)); // 两端化开
+      parts.push({
+        x: left + x, y: top + y,                            // 页面坐标，滚动不用管
+        size: .55 + Math.random() * .85,                    // 半径(css px)
+        alpha: (.25 + Math.random() * .65) * edge,
+        phase: Math.random() * 6.28,                        // 闪烁相位：各闪各的
+        speed: 1 + Math.random() * 2.5,                     // 闪烁快慢
+        wob: .5 + Math.random() * 1.4,                      // 漂移幅度
+        delay: Math.random() * 150,                         // 揭开时错峰熄灭的「时刻表」
+        dur: 200 + Math.random() * 180,
+        fly: [(Math.random() - .5) * 30,                    // 熄灭时向外飘的速度(px/s)
+              (y < r.height / 2 ? -1 : 1) * (10 + Math.random() * 25)],
+      });
+    }
+  });
+  return { el, parts, nRects: rects.length, state: "hidden", t0: 0 };
+}
+const clouds = [...document.querySelectorAll(".secret")].map(seed);
+
+/* ── 3 & 4. 每帧重画：活着 = 各自闪烁 + 微漂；揭开 = 按各自时刻表熄灭 + 飘走 ── */
+function frame(now){
+  ctx.clearRect(0, 0, W, H);
+  const t = now / 1000;
+  for (const c of clouds){
+    if (c.el.getClientRects().length !== c.nRects){   // 折行变了 → 旧坐标作废，重新铺
+      Object.assign(c, seed(c.el), { state: c.state, t0: c.t0 });
+      continue;
+    }
+    for (const p of c.parts){
+      let x = p.x + Math.sin(t * p.speed * .6 + p.phase) * p.wob;        // 微漂
+      let y = p.y + Math.cos(t * p.speed * .5 + p.phase) * p.wob * .7;
+      let a = p.alpha * (.4 + .6 * (.5 + .5 * Math.sin(t * p.speed + p.phase))); // 闪烁
+
+      if (c.state !== "hidden"){                    // 正在揭开 / 藏回
+        const e = Math.min(1, Math.max(0, (now - c.t0 - p.delay) / p.dur));
+        const k = e * e * (3 - 2 * e);              // smoothstep：起止都柔
+        if (c.state === "opening" || c.state === "open"){
+          a *= 1 - k;                               // 逐粒熄灭……
+          x += p.fly[0] * e * p.dur / 1000;         // ……边熄边往行外飘
+          y += p.fly[1] * e * p.dur / 1000;
+        } else {
+          a *= k;                                   // 藏回：逐粒重新点亮
+        }
+      }
+      if (a < .02) continue;
+      ctx.globalAlpha = a;
+      ctx.fillStyle = "#5d4152";
+      ctx.beginPath();
+      ctx.arc(x, y, p.size, 0, 6.2832);
+      ctx.fill();
+    }
+    if (c.state === "opening" && now - c.t0 > 600) c.state = "open";      // 全熄了
+    if (c.state === "closing" && now - c.t0 > 600) c.state = "hidden";    // 全亮了
+  }
+  ctx.globalAlpha = 1;
+  requestAnimationFrame(frame);
+}
+requestAnimationFrame(frame);
+
+/* ── 5. 点击切换：文字的浮现/隐去交给 CSS 的 color 过渡，
+   跟星尘的逐粒熄灭在时间上重叠 —— 所以中间没有「什么都看不见」的空窗。 ── */
+for (const c of clouds){
+  c.el.addEventListener("click", () => {
+    const showing = c.state === "opening" || c.state === "open";
+    c.state = showing ? "closing" : "opening";
+    c.t0 = performance.now();
+    c.el.classList.toggle("open", !showing);
+  });
+}
+
+addEventListener("resize", () => {
+  fit();
+  clouds.forEach(c => Object.assign(c, seed(c.el), { state: c.state, t0: c.t0 }));
+});
+</script>
+</html>
