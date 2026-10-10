@@ -53,7 +53,7 @@ or
 
 ## 许可
 
-MIT © 2026 [Rime](https://tutooth.com)（小雾）
+CC BY-NC-SA 4.0 © 2026 [Anko3o, rime & Philo](https://tutooth.com)。二改、借鉴请注明原仓库地址，不得商用，衍生作品同协议。
 二改自用请随意
 使用本仓库代码二改再发布请标注 @ankoo3o
 
